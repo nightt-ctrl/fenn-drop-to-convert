@@ -1,23 +1,38 @@
 # Drop-to-Convert for Fenn
 
-Batch-convert images from the Windows notch.
+Drop files into the Windows notch and pick an output based on the file type. You can mix different kinds of files in the same batch.
 
-## Install
+## Install or update
 
-1. Install [Python 3.10 or newer](https://www.python.org/downloads/windows/) for Windows if needed. Use a version with a Pillow wheel, such as Python 3.12 x64. Make `python` available on PATH, or pass the full path to `python.exe` as the first argument to the installer.
-2. Download this repository as a ZIP from **Code → Download ZIP** and extract it. Open PowerShell in the extracted folder and run `.\install.cmd`.
-3. Turn on **Plugin dev mode** in Fenn Settings. Open the notch grid and select **Convert**. Fenn's [development guide](https://fenn.click/docs/develop) covers building a compatible host if your Fenn build requires it.
+1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) if needed. Python 3.12 x64 is a tested option. Make `python` available on PATH, or pass the full path to `python.exe` as the first argument to the installer.
+2. Download the repository using **Code → Download ZIP** and extract it. Run `.\install.cmd` from the extracted folder. The installer sets up Pillow, PDFium, and FFmpeg in the plugin's private Python environment.
+3. For Word, spreadsheet, and presentation conversions, install [LibreOffice](https://www.libreoffice.org/download/download-libreoffice/). The standard Windows installation is detected automatically. For a custom location, set `FENN_CONVERT_SOFFICE` to the full path to `soffice.com` before starting Fenn.
+4. Enable **Plugin dev mode** in Fenn Settings and open **Convert** from the notch grid. The [Fenn development guide](https://fenn.click/docs/develop) covers building a compatible host if your installed build requires it.
 
-The installer downloads Pillow into a virtual environment under `%APPDATA%\Fenn\plugin-data\drop-to-convert` and installs the plugin under `%APPDATA%\Fenn\plugins\drop-to-convert`. To update, run the installer from the new checkout. To uninstall, remove both folders.
+The installer updates the existing plugin in `%APPDATA%\Fenn\plugins\drop-to-convert` and keeps its environment in `%APPDATA%\Fenn\plugin-data\drop-to-convert`. To uninstall, remove both folders.
 
 ## Use
 
-1. Open the Convert tile and drop images onto the notch while the plugin page is open.
-2. Choose **PNG**, **JPEG**, or **WebP**, then click **Convert**.
-3. Check the output sizes and any errors in the results. Click an output row to open its folder. **Open folder** opens the folder of the first successful result.
+1. Open **Convert** and drop up to 100 files onto the notch.
+2. Click a file in the queue and choose one of its output formats. **Apply to compatible files** applies that format to every queued file that can produce it. Choose other formats for the remaining files if needed.
+3. Click **Convert** to run the configured jobs. Files without a selected format stay in the queue. Click a result to open its folder.
 
-Outputs appear beside each input as `name-converted.ext`, with a numeric suffix if that name already exists. A batch can contain up to 100 files. Inputs can be single-frame PNG, JPEG, WebP, BMP, GIF, TIFF, or ICO images up to 40 megapixels. Conversion applies EXIF orientation and strips embedded metadata and color profiles. PNG and WebP keep transparency. JPEG flattens it against white. JPEG and WebP use lossy quality settings of 90 and 85, respectively.
+Each output is saved beside the original as `name-converted.ext`. If the name already exists, the plugin adds a numeric suffix. PDF page images are saved in their own folder. The plugin does not upload files.
 
-Conversion runs locally. The plugin makes no network requests.
+## Supported conversions
 
-See the [Fenn plugin docs](https://fenn.click/docs) for the host protocol and `%APPDATA%\Fenn\fenn.log` for diagnostics.
+| Input | Output choices |
+| --- | --- |
+| Images such as PNG, JPEG, WebP, AVIF, BMP, GIF, TIFF, and ICO | PNG, JPEG, WebP, AVIF, BMP, GIF, TIFF, ICO, PDF, JPEG 2000, TGA, and PPM, depending on available Pillow encoders |
+| Animated GIF, WebP, AVIF, or PNG | Animated PNG, GIF, or WebP |
+| PDF | PNG, JPEG, or WebP for every page, or TXT from the document's text layer |
+| Word and text documents such as DOCX, DOC, ODT, RTF, TXT, and HTML | PDF, DOCX, DOC, ODT, RTF, TXT, HTML, and EPUB with LibreOffice |
+| Spreadsheets such as XLSX, XLS, XLSB, ODS, CSV, and TSV | PDF, XLSX, XLS, ODS, CSV, and TSV with LibreOffice |
+| Presentations such as PPTX, PPT, and ODP | PDF, PPTX, PPT, and ODP with LibreOffice |
+| Audio such as MP3, WAV, FLAC, M4A, AAC, OGG, Opus, and WMA | MP3, WAV, FLAC, M4A, AAC, OGG, Opus, AIFF, and WMA |
+| Video such as MP4, WebM, MKV, MOV, AVI, and WMV | MP4, WebM, MKV, MOV, AVI, GIF, and the audio formats above when the file contains an audio track |
+| ZIP, TAR, TAR.GZ, TAR.BZ2, and TAR.XZ archives | Repack into any of the other listed archive formats |
+
+Image conversion applies EXIF orientation and removes metadata. JPEG, PDF, and PPM flatten transparency against white. The image limit is 40 megapixels, including all frames combined for animations. PDF text export requires selectable text. CSV and TSV exports use the first sheet. Media conversion uses the first playable video stream and first audio stream. Archive repacking supports ordinary files and folders and rejects links and unsafe paths.
+
+Exact compatibility depends on the input and codec. A damaged, encrypted, or unsupported file gets a per-file error. See the [LibreOffice filters](https://help.libreoffice.org/latest/en-US/text/shared/guide/convertfilters.html) and [Pillow formats](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html) for backend details.
