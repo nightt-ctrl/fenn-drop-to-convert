@@ -4,6 +4,10 @@ Drop files into the Windows notch and pick an output based on the file type. You
 
 ## Install or update
 
+Install in Fenn and open the **Convert** tile. On first run, click **Set up Drop-to-Convert**. It uses a compatible Python already installed on your computer or offers setup through Windows Package Manager. The converter opens in the same tile when setup finishes.
+
+For a manual install:
+
 1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) if needed. Python 3.12 x64 is a tested option. Make `python` available on PATH, or pass the full path to `python.exe` as the first argument to the installer.
 2. Download the repository using **Code → Download ZIP** and extract it. Run `.\install.cmd` from the extracted folder. The installer sets up Pillow, PDFium, and FFmpeg in the plugin's private Python environment.
 3. Enable **Plugin dev mode** in Fenn Settings and open **Convert** from the notch grid. The [Fenn development guide](https://fenn.click/docs/develop) covers building a compatible host if your installed build requires it.
@@ -21,6 +25,16 @@ The installer updates the existing plugin in `%APPDATA%\Fenn\plugins\drop-to-con
 3. Click **Convert** to run the configured jobs. Files without a selected format stay in the queue. Click a result to open its folder.
 
 Each output is saved beside the original as `name-converted.ext`. If the name already exists, the plugin adds a numeric suffix. PDF page images are saved in their own folder. The plugin does not upload files.
+
+## Network and setup
+
+- **Set up Drop-to-Convert** downloads pinned binary packages for Pillow, PDFium, and imageio-ffmpeg from PyPI (`pypi.org` and its file host `files.pythonhosted.org`). If Python is missing, Windows Package Manager uses the `winget` community source and the Python.org installer for `Python.Python.3.13`.
+- **Download requirements** asks Windows Package Manager for `TheDocumentFoundation.LibreOffice` from the `winget` community source. The installer comes from The Document Foundation or its download mirrors.
+- The manual setup command downloads the same Python packages from PyPI. Conversion outputs are written locally. Setup does not send the names, paths, or contents of dropped files.
+
+The first-run screen uses Windows Script Host. If Windows Script Host is disabled on your machine, use the manual installation steps above. Setup logs are stored in the plugin data folder.
+
+The plugin code is released under the [MIT License](LICENSE). The bundled Fenn SDK notice is in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
 
 ## Supported conversions
 

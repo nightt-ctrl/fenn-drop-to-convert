@@ -14,7 +14,8 @@ if not exist "%VENV%\Scripts\python.exe" (
     "%BOOTSTRAP%" -m venv "%VENV%"
     if errorlevel 1 exit /b 1
 )
-"%VENV%\Scripts\python.exe" -m pip install --disable-pip-version-check -r "%~dp0requirements.txt"
+set "PIP_CONFIG_FILE=NUL"
+"%VENV%\Scripts\python.exe" -I -m pip --isolated install --no-input --disable-pip-version-check --only-binary=:all: --index-url https://pypi.org/simple -r "%~dp0requirements.txt"
 if errorlevel 1 exit /b 1
 
 if not exist "%PLUGIN_DIR%\" (
@@ -22,7 +23,7 @@ if not exist "%PLUGIN_DIR%\" (
     if errorlevel 1 exit /b 1
 )
 if /I not "%~dp0"=="%PLUGIN_DIR%\" (
-    for %%F in (conversion.py main.py fenn.py launch.cmd THIRD-PARTY-NOTICES.txt plugin.toml) do (
+    for %%F in (conversion.py main.py fenn.py bootstrap.js bootstrap-tools.cmd requirements.txt launch.cmd LICENSE THIRD-PARTY-NOTICES.txt plugin.toml) do (
         copy /y "%~dp0%%F" "%PLUGIN_DIR%\%%F" >nul
         if errorlevel 1 exit /b 1
     )
