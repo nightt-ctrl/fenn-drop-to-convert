@@ -6,8 +6,11 @@ Drop files into the Windows notch and pick an output based on the file type. You
 
 1. Install [Python 3.11 or newer](https://www.python.org/downloads/windows/) if needed. Python 3.12 x64 is a tested option. Make `python` available on PATH, or pass the full path to `python.exe` as the first argument to the installer.
 2. Download the repository using **Code → Download ZIP** and extract it. Run `.\install.cmd` from the extracted folder. The installer sets up Pillow, PDFium, and FFmpeg in the plugin's private Python environment.
-3. For Word, spreadsheet, and presentation conversions, install [LibreOffice](https://www.libreoffice.org/download/download-libreoffice/). The standard Windows installation is detected automatically. For a custom location, set `FENN_CONVERT_SOFFICE` to the full path to `soffice.com` before starting Fenn.
-4. Enable **Plugin dev mode** in Fenn Settings and open **Convert** from the notch grid. The [Fenn development guide](https://fenn.click/docs/develop) covers building a compatible host if your installed build requires it.
+3. Enable **Plugin dev mode** in Fenn Settings and open **Convert** from the notch grid. The [Fenn development guide](https://fenn.click/docs/develop) covers building a compatible host if your installed build requires it.
+
+Office conversions use LibreOffice. If it is missing, select a queued Office file and click **Download requirements**. The plugin uses Windows Package Manager to download and install LibreOffice. Follow any setup prompts. After setup, the format choices appear automatically for the files already in your queue.
+
+If Windows Package Manager is unavailable, install [LibreOffice](https://www.libreoffice.org/download/download-libreoffice/) and click **Check again**. For a custom installation, set `FENN_CONVERT_SOFFICE` to the full path to `soffice.com` before starting Fenn.
 
 The installer updates the existing plugin in `%APPDATA%\Fenn\plugins\drop-to-convert` and keeps its environment in `%APPDATA%\Fenn\plugin-data\drop-to-convert`. To uninstall, remove both folders.
 

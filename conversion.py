@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -99,6 +100,7 @@ MAX_PIXELS = 40_000_000
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 Image.init()
 AVAILABLE_IMAGE_READERS = tuple(name for name in IMAGE_READERS if name in Image.OPEN)
+OFFICE_DOWNLOAD = "https://www.libreoffice.org/download/download-libreoffice/"
 
 
 def available_office():
@@ -111,6 +113,29 @@ def available_office():
         ) if root],
     ]
     return next((str(Path(path).resolve()) for path in candidates if path and Path(path).is_file()), None)
+
+
+def install_office(stopping):
+    if available_office():
+        return
+    winget = shutil.which("winget.exe")
+    if not winget:
+        app_data = os.environ.get("LOCALAPPDATA")
+        if app_data:
+            alias = Path(app_data) / "Microsoft/WindowsApps/winget.exe"
+            if alias.is_file():
+                winget = str(alias)
+    if not winget:
+        raise ValueError("Windows Package Manager is unavailable. Use the LibreOffice download instead.")
+    code, details = run_tool([
+        winget, "install", "--id", "TheDocumentFoundation.LibreOffice", "--exact",
+        "--source", "winget", "--no-upgrade", "--disable-interactivity",
+    ], stopping, 1800)
+    if not available_office():
+        if code:
+            print(f"LibreOffice WinGet setup exited with {code}: {details[-3000:]}", file=sys.stderr)
+            raise ValueError("LibreOffice setup didn’t finish. Try again or use the LibreOffice download.")
+        raise ValueError("LibreOffice setup finished, but the plugin couldn’t find it. Check again after setup closes.")
 
 
 def run_tool(command, stopping, timeout):
@@ -153,7 +178,7 @@ def inspect(source, stopping):
         family, targets = OFFICE_INPUTS[ext]
         office = available_office()
         if not office:
-            raise ValueError(f"{family} conversion needs LibreOffice. See the README for setup.")
+            return family, (), None
         return family, tuple(t for t in targets if t.extension != {"htm": "html", "tab": "tsv"}.get(ext, ext)), office
 
     try:

@@ -12,6 +12,11 @@ import fenn
 
 
 MAX_BATCH = 100
+FILE_ICONS = {
+    "Image": "file-image", "Animated image": "file-image", "Document": "file-doc",
+    "Spreadsheet": "file-xls", "Presentation": "file-ppt", "PDF": "file-pdf",
+    "Audio": "file-audio", "Video": "file-video", "Archive": "file-zip",
+}
 
 
 @dataclass
@@ -23,6 +28,10 @@ class File:
     engine: str | None = None
     problem: str = ""
     target: conversion.Target | None = None
+
+    @property
+    def needs_office(self):
+        return self.family in conversion.OFFICE and self.engine is None
 
 
 def display_size(size):
@@ -52,12 +61,14 @@ class Converter:
         self.total = 0
         self.busy = ""
         self.notice = ""
+        self.setup_error = ""
         self.next_id = 0
         self.worker = None
         self.lock = threading.Lock()
         self.stopping = threading.Event()
         self.app.on_message("files")(self.add_files)
         self.app.on_message("layout")(self.on_layout)
+        self.app.on_message("page_open")(self.on_page_open)
         self.app.on_message("event")(self.on_event)
         self.app.on_message("shutdown")(self.shutdown)
 
@@ -66,15 +77,20 @@ class Converter:
         if self.app.tile_size == "small":
             self.app.tile(fenn.column([icon], align="center", justify="center"))
         else:
-            label = {"inspect": "Checking", "convert": "Converting"}.get(self.busy, "Convert")
+            label = {"inspect": "Checking", "convert": "Converting", "install": "Setting up"}.get(
+                self.busy, "Convert"
+            )
             self.app.tile(fenn.row([icon, fenn.text(label)], align="center", gap=5))
 
-        children = [
-            fenn.text("Drop files onto the notch", size="title"),
-            fenn.text("Choose an output for each file. Copies go beside the originals.", color="dim"),
-        ]
-        if self.busy == "inspect":
-            children.append(fenn.text("Checking file types…"))
+        children = []
+        if self.busy == "install":
+            children.append(fenn.card([
+                fenn.text("Downloading and installing LibreOffice", size="title"),
+                fenn.text("Follow any Windows setup prompts. Your queue will be here when setup finishes.",
+                          color="dim", wrap=True),
+            ], padding=12))
+        elif self.busy == "inspect":
+            children.append(fenn.card([fenn.text("Checking file types…", size="title")], padding=12))
         elif self.busy == "convert":
             children.extend([
                 fenn.text(f"Converting {len(self.results)} of {self.total}"),
@@ -82,57 +98,98 @@ class Converter:
             ])
         elif self.pending:
             children.extend(self.queue_view())
+        else:
+            children.append(fenn.card([
+                fenn.icon("tray-arrow-down", size=30, color="accent"),
+                fenn.text("Drop files onto the notch", size="title"),
+                fenn.text("Choose an output format and save a copy beside the original.",
+                          color="dim", wrap=True),
+            ], padding=14, gap=7))
 
         if self.notice:
             children.append(fenn.text(self.notice, color="orange", wrap=True))
         if self.results:
             if self.busy != "convert":
                 count = sum(path is not None for path, _ in self.results.values())
-                children.append(fenn.text(f"{count} converted, {self.total - count} failed", bold=True))
+                summary = [
+                    fenn.text(f"{count} converted, {self.total - count} failed", bold=True),
+                    fenn.spacer(),
+                ]
                 if count:
-                    children.append(fenn.button("folder", label="Open folder", icon="folder-open"))
+                    summary.append(fenn.button("folder", label="Open folder", icon="folder-open"))
+                children.append(fenn.row(summary, align="center"))
             children.append(fenn.list_view([item for _, item in self.results.values()]))
         self.app.page(fenn.column(children, scroll=True, gap=8))
 
     def queue_view(self):
         active = self.pending[self.selected]
         ready = sum(file.target is not None for file in self.pending.values())
-        rows = [fenn.text(active.path.name, bold=True, tooltip=active.path.name)]
-        if active.problem:
-            rows.append(fenn.text(active.problem, color="orange", wrap=True))
+        details = [
+            fenn.row([
+                fenn.icon(FILE_ICONS.get(active.family, "files"), color="accent"),
+                fenn.text(active.path.name, size="title", tooltip=active.path.name),
+            ], align="center"),
+        ]
+        if active.needs_office:
+            details.extend([
+                fenn.text("Office conversion needs LibreOffice. Setup runs through Windows Package Manager.",
+                          color="dim", wrap=True),
+                fenn.row([
+                    fenn.button("install-office", label="Download requirements",
+                                icon="download-simple", primary=True),
+                    fenn.button("check-office", label="Check again", icon="arrow-clockwise"),
+                ]),
+            ])
+            if self.setup_error:
+                details.extend([
+                    fenn.text(self.setup_error, color="orange", wrap=True),
+                    fenn.button("manual-office", label="Open LibreOffice download"),
+                ])
+        elif active.problem:
+            details.append(fenn.text(active.problem, color="orange", wrap=True))
         else:
-            for start in range(0, len(active.targets), 4):
-                rows.append(fenn.row([
-                    fenn.button(
-                        f"target:{active.id}:{target.extension}",
-                        label=target.label, primary=(active.target == target),
-                    )
-                    for target in active.targets[start:start + 4]
-                ]))
+            details.append(fenn.text("Output format", size="small", color="dim"))
+            details.append(fenn.grid(min(4, len(active.targets)), [
+                fenn.button(
+                    f"target:{active.id}:{target.extension}", label=target.label,
+                    primary=(active.target == target), width=0,
+                )
+                for target in active.targets
+            ], gap=5))
             if active.target and any(
                 file.id != active.id and active.target.extension in {t.extension for t in file.targets}
                 and (not file.target or file.target.extension != active.target.extension)
                 for file in self.pending.values()
             ):
-                rows.append(fenn.button(f"apply:{active.id}", label="Apply to compatible files"))
-        controls = [fenn.button("clear", label="Clear queue")]
+                details.append(fenn.button(f"apply:{active.id}", label="Apply to compatible files"))
+        controls = [
+            fenn.text(f"Queue · {len(self.pending)} files", bold=True),
+            fenn.spacer(),
+        ]
         if ready:
-            controls.insert(0, fenn.button("convert", label=f"Convert {ready}", primary=True))
-        rows.append(fenn.row(controls))
-        rows.append(fenn.list_view([
+            controls.append(fenn.button("convert", label=f"Convert {ready}", primary=True))
+        controls.append(fenn.button("clear", label="Clear queue"))
+        files = fenn.list_view([
             fenn.item(
-                file.id, file.path.name, subtitle=file.problem or file.family,
-                trailing=file.target.label if file.target else None,
+                file.id, file.path.name, subtitle=file.family or file.problem,
+                trailing=file.target.label if file.target else
+                ("Setup needed" if file.needs_office else None),
                 selected=file.id == self.selected,
-                icon="warning-circle" if file.problem else "file-image",
+                icon="warning-circle" if file.problem else FILE_ICONS.get(file.family, "files"),
             )
             for file in self.pending.values()
-        ]))
-        return rows
+        ])
+        return [fenn.card(details, padding=10, gap=7), fenn.row(controls, align="center"), files]
 
     def on_layout(self, message):
         if message.get("target") == "tile":
             with self.lock:
+                self.draw()
+
+    def on_page_open(self, _):
+        with self.lock:
+            if not self.busy:
+                self.refresh_office()
                 self.draw()
 
     def shutdown(self, _):
@@ -174,12 +231,7 @@ class Converter:
         for file in files:
             if self.stopping.is_set():
                 return
-            try:
-                file.family, file.targets, file.engine = conversion.inspect(file.path, self.stopping)
-                if not file.targets:
-                    file.problem = "No compatible output is available."
-            except Exception as error:
-                file.problem = explain(error)
+            self.inspect_file(file)
         with self.lock:
             if self.stopping.is_set():
                 return
@@ -189,12 +241,60 @@ class Converter:
             self.busy = ""
             self.draw()
 
+    def inspect_file(self, file):
+        file.problem = ""
+        try:
+            file.family, file.targets, file.engine = conversion.inspect(file.path, self.stopping)
+            if not file.targets and not file.needs_office:
+                file.problem = "No compatible output is available."
+        except Exception as error:
+            file.family, file.targets, file.engine = "", (), None
+            file.problem = explain(error)
+
+    def refresh_office(self):
+        waiting = [file for file in self.pending.values() if file.needs_office]
+        if not waiting or not conversion.available_office():
+            return False
+        for file in waiting:
+            self.inspect_file(file)
+        self.setup_error = ""
+        return True
+
+    def setup_office(self, _):
+        problem = ""
+        try:
+            conversion.install_office(self.stopping)
+        except (OSError, ValueError) as error:
+            problem = explain(error)
+        with self.lock:
+            if self.stopping.is_set():
+                return
+            if not self.refresh_office():
+                self.setup_error = problem or "LibreOffice wasn’t detected. Try checking again."
+            self.busy = ""
+            self.draw()
+
     def on_event(self, event):
         if event.get("kind") != "click":
             return
         control = event.get("id", "")
         with self.lock:
             if self.busy:
+                return
+            active = self.pending.get(self.selected)
+            if control in {"install-office", "check-office", "manual-office"}:
+                if not active or not active.needs_office:
+                    return
+                if self.refresh_office():
+                    self.draw()
+                elif control == "install-office":
+                    self.setup_error = ""
+                    self.start("install", self.setup_office, None)
+                elif control == "manual-office" and self.setup_error:
+                    self.app.open(conversion.OFFICE_DOWNLOAD)
+                else:
+                    self.setup_error = "LibreOffice wasn’t detected. Finish setup, then check again."
+                    self.draw()
                 return
             if control == "convert":
                 ready = [file for file in self.pending.values() if file.target]
